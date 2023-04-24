@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "nika-backend-mongo"
+version = "0.1.0"
+description = ""
+authors = ["Klayd <vladmr.tube@gmail.com>"]
+readme = "README.md"
+packages = [{include = "nika_backend_mongo"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+fastapi = "^0.95.1"
+uvicorn = {extras = ["standard"], version = "^0.21.1"}
+motor = "^3.1.2"
+beanie = "^1.18.0"
+openai = "^0.27.4"
+pyotp = "^2.8.0"
+python-socketio = "^5.8.0"
+fastapi-sio = "^0.3.0"
+apscheduler = "^3.10.1"
+python-decouple = "^3.8"
+base32-lib = "^1.0.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
