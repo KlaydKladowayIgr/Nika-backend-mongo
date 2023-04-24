@@ -36,14 +36,17 @@ def callback(data):
 @sio.on("connect")
 async def connect():
     print("Connected")
-    await sio.emit("auth", {"phone": "88005553535"}, callback=callback)
+    """await sio.emit("auth", {"phone": "88005553535"}, callback=callback)
     await asyncio.sleep(5)
     await sio.emit("auth_retry", callback=callback)
     code = input("Code: ")
     await asyncio.sleep(10)
     await sio.emit("auth_confirm", {"code": code}, callback=callback)
     await asyncio.sleep(5)
-    await sio.emit("auth_cancel", callback=callback)
+    await sio.emit("auth_cancel", callback=callback)"""
+    await sio.emit("auth", {"phone": "79999999999"}, callback=callback)
+    await asyncio.sleep(3)
+    await sio.emit("auth_confirm", {"code": "000000"}, callback=callback)
     # await sio.emit("auth", {"code": "232140"})
 
 

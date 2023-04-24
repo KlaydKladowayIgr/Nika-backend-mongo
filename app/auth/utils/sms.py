@@ -1,7 +1,6 @@
-import re
 from datetime import datetime, timedelta
 from random import randint
-from typing import Optional, Tuple
+from typing import Optional
 
 from pydantic import ValidationError
 from pyotp import HOTP

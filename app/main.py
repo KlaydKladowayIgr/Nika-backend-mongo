@@ -4,12 +4,12 @@ from fastapi import FastAPI
 from fastapi.encoders import jsonable_encoder
 from fastapi_sio import FastAPISIO
 
-import app.auth.utils.sms as sms
 import app.auth.user as user_auth
+import app.auth.utils.sms as sms
 import app.database as db
 from app.auth.models.user import *
-from app.schemas import WSResponse
 from app.auth.sms_api import SMSBaseException
+from app.schemas import WSResponse
 
 app = FastAPI()
 sio = FastAPISIO(app=app, mount_location='/')
@@ -56,9 +56,10 @@ async def sms_auth(sid, data=None) -> dict:
         if not isinstance(code, UserAuthCodeInfo):
             return jsonable_encoder(
                 WSResponse(
-                    status=500,
+                    status=500 if code else 403,
                     type="error",
-                    data={"details": code.__str__()}
+                    data={
+                        "details": code.__str__() if code else "You cannot resend the code using this function. Use auth_retry!"}
                 )
             )
     except SMSBaseException as e:
@@ -194,6 +195,7 @@ async def auth(sid, data):
             data=auth_data
         )
     )
+
 
 @app.on_event("startup")
 async def startup():

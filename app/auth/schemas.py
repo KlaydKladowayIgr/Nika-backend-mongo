@@ -1,7 +1,3 @@
-import re
-
-from pydantic import BaseModel, validator
-
 """
 class PhoneNumber(BaseModel):
     number: int
