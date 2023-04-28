@@ -1,4 +1,6 @@
+import random
 import re
+import string
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -49,13 +51,17 @@ class UserUpdate(UserAuth):
     name: Optional[str] = None
 
 
+def generate_promocode(ln: int):
+    letters = string.ascii_lowercase
+    return ''.join(random.choice(letters) for i in range(ln))
+
+
 class UserRead(UserUpdate):
     phone: Indexed(str, unique=True)
-
-    @validator("phone")
-    def check_phone(cls, p):
-        if len(p) >= 12:
-            raise ValueError("The length of the phone number must be less than or equal to 11 characters")
+    tariff: str = "free"
+    tariff_expire: datetime = datetime.utcnow() + timedelta(days=1)
+    balance: int = 0
+    promocode: str = generate_promocode(10)
 
     # validators
     _check_phone = validator("phone", allow_reuse=True)(check_phone)
