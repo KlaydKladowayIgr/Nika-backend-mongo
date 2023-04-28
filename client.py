@@ -8,7 +8,7 @@ sio = socketio.AsyncClient()
 async def main():
     await sio.connect("http://localhost:8000",
                       auth={
-                          "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwaG9uZSI6Ijg5OTk4NTg4NTQxIiwiZXhwIjoxNjgyODgxMjAzfQ.26jFL6RSiLpLgONBHLZkKAdkA3rr3q9nKTnz4BxGD3o"
+                          "token": "token"
                       }
                       )
     await sio.wait()
@@ -42,7 +42,7 @@ def callback(data):
 async def connect(data=None):
     print(data)
     print("Connected")
-    await sio.emit("auth", {"phone": "89998588541"}, callback=callback)
+    await sio.emit("auth", {"phone": "phone"}, callback=callback)
     await asyncio.sleep(2)
     await sio.emit("auth_confirm", {"code": input(">>> ")}, callback=callback)
 
