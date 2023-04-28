@@ -5,6 +5,7 @@ from typing import Optional
 from pydantic import ValidationError
 from pyotp import HOTP
 
+from app.auth.models.limits import Limit
 from app.auth.models.user import UserAuthCode, UserAuthCodeInfo
 from app.auth.sms_api import SMSApi
 from app.config import CONFIG
@@ -30,7 +31,7 @@ async def send_code(phone: str) -> Optional[UserAuthCodeInfo]:
 
     code = await create_code()
 
-    await sms.send(phone, code)
+    #await sms.send(phone, code)
 
     return await set_code(phone, code)
 
@@ -82,4 +83,10 @@ async def verify_code(code: str) -> UserAuthCode | None:
 async def check_codes() -> None:
     async for i in UserAuthCode.find_all():
         if i.expire <= datetime.utcnow():
+            await i.delete()
+
+
+async def check_limit() -> None:
+    async for i in Limit.find_all():
+        if i.expire >= datetime.utcnow():
             await i.delete()
