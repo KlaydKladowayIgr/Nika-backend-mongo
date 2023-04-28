@@ -5,6 +5,8 @@ from typing import Optional
 from beanie import Document, Indexed
 from pydantic import BaseModel, validator
 
+from app.auth.utils.checks import check_phone
+
 
 class UserAuthCodeInfo(BaseModel):
     phone: str
@@ -55,11 +57,8 @@ class UserRead(UserUpdate):
         if len(p) >= 12:
             raise ValueError("The length of the phone number must be less than or equal to 11 characters")
 
-        pattern = r'^(\+7|7|8)?[\s\-]?\(?[489][0-9]{2}\)?[\s\-]?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}$'
-        if not bool(re.match(pattern, p)):
-            raise ValueError("Incorrect phone number format")
-
-        return p
+    # validators
+    _check_phone = validator("phone", allow_reuse=True)(check_phone)
 
 
 class User(Document, UserRead):
