@@ -1,3 +1,6 @@
+import asyncio
+import nest_asyncio
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI
@@ -8,7 +11,9 @@ import app.auth.tokens as token_auth
 import app.auth.user as user_auth
 import app.auth.utils.sms as sms
 import app.database as db
+
 from app.auth.models.auth import Tokens
+from app.auth.models.limits import Limit
 from app.auth.models.user import *
 from app.auth.sms_api import SMSBaseException
 from app.chatgpt.schemas import Message
@@ -17,7 +22,43 @@ from app.schemas import WSResponse
 app = FastAPI()
 sio = FastAPISIO(app=app, mount_location='/')
 
-base_emitter = sio.create_emitter("connect", WSResponse)
+chat_emitter = sio.create_emitter("add_message", WSResponse)
+
+
+def authorized(func):
+    def wrapper(sid, *args, **kwargs):
+        session = asyncio.run(sio.get_session(sid))
+
+        if not session:
+            return jsonable_encoder(
+                WSResponse(
+                    status=404,
+                    type="error",
+                    data={"details": "Session not found"}
+                )
+            )
+
+        if not session.get("token"):
+            return jsonable_encoder(
+                WSResponse(
+                    status=401,
+                    type="error",
+                    data={"details": "Unauthorized"}
+                )
+            )
+
+        if not asyncio.run(token_auth.validate_token(session["token"])):
+            return jsonable_encoder(
+                WSResponse(
+                    status=401,
+                    type="error",
+                    data={"details": "Invalid token!"}
+                )
+            )
+
+        return asyncio.run(func(sid, *args, **kwargs))
+
+    return wrapper
 
 
 @sio.on("connect")
@@ -25,13 +66,13 @@ async def on_connect(sid, data: dict, auth: dict):
     print(f"Session: {sid} connected")
 
     if not auth.get("token"):
-        await base_emitter.emit(
+        return jsonable_encoder(
             WSResponse(
                 status=400,
                 type="error",
-                data={"details": "Incorrect auth!"}
-            ),
-            to=sid
+                data={"details": "Incorrect auth! "
+                                 "If you are logging in for the first time, log in using the auth method"}
+            )
         )
 
     user = await token_auth.authenticate(auth["token"])
@@ -44,15 +85,12 @@ async def on_connect(sid, data: dict, auth: dict):
                 data={"details": "Invalid token!"}
             )
         )
-    await base_emitter.emit(
-        WSResponse(
-            status=400,
-            type="error",
-            data={"details": "Incorrect auth!"}
-        ),
-        to=sid
-    )
-    """
+
+    sio.enter_room(sid, room=user.id)
+    await sio.save_session(sid,
+                           {"token": auth["token"], "phone": user.phone, "can_send": False}
+                           )
+
     return jsonable_encoder(
         WSResponse(
             status=201,
@@ -60,7 +98,6 @@ async def on_connect(sid, data: dict, auth: dict):
             data=user
         )
     )
-    """
 
 
 @sio.on("disconnect")
@@ -120,6 +157,9 @@ async def sms_auth(sid, data=None) -> dict:
         )
 
     await sio.save_session(sid, {"phone": session["phone"], "can_send": False})
+    await Limit(
+        phone=session["phone"]
+    ).create()
 
     return jsonable_encoder(
         WSResponse(
@@ -131,7 +171,7 @@ async def sms_auth(sid, data=None) -> dict:
 
 
 @sio.on("auth_retry")
-async def sms_auth_retry(sid, *args) -> dict:
+async def sms_auth_retry(sid, *args, **kwargs) -> dict:
     session: dict = await sio.get_session(sid)
 
     if not session:
@@ -161,6 +201,20 @@ async def sms_auth_retry(sid, *args) -> dict:
             )
         )
 
+    phone_limit = await Limit.find_one(Limit.phone == session["phone"])
+
+    if phone_limit.limit == 0:
+        return jsonable_encoder(
+            WSResponse(
+                status=403,
+                type="error",
+                data={
+                    "details": "SMS limit expired",
+                    "expire": phone_limit.expire
+                }
+            )
+        )
+
     try:
         code = await sms.send_code(session["phone"])
     except SMSBaseException as e:
@@ -172,6 +226,9 @@ async def sms_auth_retry(sid, *args) -> dict:
             )
         )
 
+    phone_limit.limit -= 1
+    await phone_limit.update()
+
     return jsonable_encoder(
         WSResponse(
             status=200,
@@ -182,7 +239,7 @@ async def sms_auth_retry(sid, *args) -> dict:
 
 
 @sio.on("auth_cancel")
-async def clean_phone(sid, *args) -> dict:
+async def clean_phone(sid, *args, **kwargs) -> dict:
     session: dict = await sio.get_session(sid)
 
     if not session:
@@ -194,7 +251,7 @@ async def clean_phone(sid, *args) -> dict:
             )
         )
 
-    await sio.save_session(sid, {})
+    await sio.save_session(sid, {"token": session["token"]} if session.get("token") else {})
     return jsonable_encoder(
         WSResponse(
             status=200,
@@ -205,7 +262,7 @@ async def clean_phone(sid, *args) -> dict:
 
 
 @sio.on("auth_confirm")
-async def auth(sid, data):
+async def auth(sid, data, *args, **kwargs):
     session: dict = await sio.get_session(sid)
 
     if not session:
@@ -237,6 +294,25 @@ async def auth(sid, data):
             )
         )
 
+    session["token"] = auth_data["auth"].access_token
+    sio.enter_room(sid, room=auth_data["user"].id)
+    await sio.save_session(sid, session)
+
+    if not auth_data["user"].name:
+        welcome_msg = Message(
+            role="system",
+            content="Привет! Я Ника, а тебя как зовут?",
+            user=auth_data["user"]
+        )
+        await chat_emitter.emit(
+            WSResponse(
+                status=200,
+                type="bot",
+                data=welcome_msg
+            )
+        )
+        await welcome_msg.create()
+
     return jsonable_encoder(
         WSResponse(
             status=200,
@@ -246,9 +322,48 @@ async def auth(sid, data):
     )
 
 
+@sio.on("logout")
+@authorized
+async def logout(sid, *args, **kwargs):
+    session: dict = await sio.get_session(sid)
+    session.pop("token")
+    await sio.save_session(sid, session)
+
+    return jsonable_encoder(
+        WSResponse(
+            status=200,
+            type="info",
+            data={"details": "Logouted"}
+        )
+    )
+
+@sio.on("set_name")
+@authorized
+async def set_username(sid, name=None):
+    if not name:
+        return
+    session = await sio.get_session(sid)
+
+    user = await User.get_by_phone(session["phone"])
+    user.name = name["name"]
+    await user.save()
+
+    emitter = sio.create_emitter("update_user", model=WSResponse)
+    await emitter.emit(
+        WSResponse(
+            status=200,
+            type="info",
+            data=user
+        ),
+        room=user.id
+    )
+
+
 @app.on_event("startup")
 async def startup():
-    await db.init_db([UserAuthCode, User, Message, Tokens])
+    await db.init_db([UserAuthCode, User, Message, Tokens, Limit])
+    nest_asyncio.apply()
     scheduler = AsyncIOScheduler()
     scheduler.add_job(sms.check_codes, trigger=IntervalTrigger(seconds=1))
+    scheduler.add_job(sms.check_limit, trigger=IntervalTrigger(seconds=1))
     scheduler.start()
