@@ -20,7 +20,7 @@ async def validate_token(token: str, is_refresh=False) -> Optional[Tokens]:
     """
     try:
         jwt.decode(token, key, algorithms=["HS256"])
-    except jwt.ExpiredSignatureError:
+    except Exception:
         return None
 
     if is_refresh:

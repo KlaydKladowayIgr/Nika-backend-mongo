@@ -12,7 +12,7 @@ async def authenticate(code: str) -> Optional[dict]:
     if not db_code:
         return None
 
-    user = await User.find_one(User.phone == db_code.phone)
+    user = await User.get_by_phone(db_code.phone)
 
     if not user:
         user = User(
