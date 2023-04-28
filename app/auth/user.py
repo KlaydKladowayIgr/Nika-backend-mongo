@@ -1,32 +1,9 @@
 from typing import Optional
 
-import jwt
-
-from datetime import datetime, timedelta
-
+from app.auth.models.auth import Tokens, TokensRead
 from app.auth.models.user import User
-from app.auth.models.auth import RefreshToken, AccessToken
+from app.auth.tokens import create_tokens
 from app.auth.utils.sms import verify_code
-from app.config import CONFIG
-
-key = CONFIG.auth_secret_key
-
-
-async def create_tokens(user: User) -> tuple:
-    access_expire = datetime.utcnow() + timedelta(hours=2)
-    refresh_expire = datetime.utcnow() + timedelta(days=30)
-
-
-    return (
-        AccessToken(
-            access_expire=access_expire,
-            access_token=jwt.encode({"phone": user.phone, "exp": access_expire}, key)
-        ),
-        RefreshToken(
-            refresh_expire=refresh_expire,
-            refresh_token=jwt.encode({"phone": user.phone, "exp": refresh_expire}, key)
-        )
-    )
 
 
 async def authenticate(code: str) -> Optional[dict]:
@@ -42,9 +19,28 @@ async def authenticate(code: str) -> Optional[dict]:
             phone=db_code.phone
         )
         await user.create()
-    tokens = await create_tokens(user)
+
+    tokens = await Tokens.find_one(Tokens.user.id == user.id)
+
+    if tokens:
+        tokens = TokensRead(**tokens.dict())
+
+    if not tokens:
+        tokens = await create_tokens(user)
+        await Tokens(
+            access_expire=tokens.access_expire,
+            access_token=tokens.access_token,
+            refresh_expire=tokens.refresh_expire,
+            refresh_token=tokens.refresh_token,
+            user=user
+        ).create()
 
     return {
         "user": user,
         "auth": tokens
     }
+
+
+async def logout(user: User):
+    tokens = Tokens.find_one(Tokens.user.id == user.id)
+    await tokens.delete()

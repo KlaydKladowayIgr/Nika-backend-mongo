@@ -4,24 +4,63 @@ from fastapi import FastAPI
 from fastapi.encoders import jsonable_encoder
 from fastapi_sio import FastAPISIO
 
-import app.auth.utils.sms as sms
+import app.auth.tokens as token_auth
 import app.auth.user as user_auth
+import app.auth.utils.sms as sms
 import app.database as db
+from app.auth.models.auth import Tokens
 from app.auth.models.user import *
-from app.schemas import WSResponse
 from app.auth.sms_api import SMSBaseException
+from app.chatgpt.schemas import Message
+from app.schemas import WSResponse
 
 app = FastAPI()
 sio = FastAPISIO(app=app, mount_location='/')
 
+base_emitter = sio.create_emitter("connect", WSResponse)
+
 
 @sio.on("connect")
-async def on_connect(sid, data):
-    print(data)
+async def on_connect(sid, data: dict, auth: dict):
     print(f"Session: {sid} connected")
 
+    if not auth.get("token"):
+        await base_emitter.emit(
+            WSResponse(
+                status=400,
+                type="error",
+                data={"details": "Incorrect auth!"}
+            ),
+            to=sid
+        )
 
-error_emitter = sio.create_emitter("set_phone", model=WSResponse)
+    user = await token_auth.authenticate(auth["token"])
+
+    if not user:
+        return jsonable_encoder(
+            WSResponse(
+                status=403,
+                type="error",
+                data={"details": "Invalid token!"}
+            )
+        )
+    await base_emitter.emit(
+        WSResponse(
+            status=400,
+            type="error",
+            data={"details": "Incorrect auth!"}
+        ),
+        to=sid
+    )
+    """
+    return jsonable_encoder(
+        WSResponse(
+            status=201,
+            type="info",
+            data=user
+        )
+    )
+    """
 
 
 @sio.on("disconnect")
@@ -53,6 +92,15 @@ async def sms_auth(sid, data=None) -> dict:
 
     try:
         code = await sms.send_code(session["phone"])
+        if not code:
+            return jsonable_encoder(
+                WSResponse(
+                    status=403,
+                    type="error",
+                    data={"details": "You cannot resend the code using this function. Use auth_retry!"}
+                )
+            )
+
         if not isinstance(code, UserAuthCodeInfo):
             return jsonable_encoder(
                 WSResponse(
@@ -61,6 +109,7 @@ async def sms_auth(sid, data=None) -> dict:
                     data={"details": code.__str__()}
                 )
             )
+
     except SMSBaseException as e:
         return jsonable_encoder(
             WSResponse(
@@ -187,6 +236,7 @@ async def auth(sid, data):
                 data={"details": "Invalid auth code"}
             )
         )
+
     return jsonable_encoder(
         WSResponse(
             status=200,
@@ -195,9 +245,10 @@ async def auth(sid, data):
         )
     )
 
+
 @app.on_event("startup")
 async def startup():
-    await db.init_db([sms.UserAuthCode, User])
+    await db.init_db([UserAuthCode, User, Message, Tokens])
     scheduler = AsyncIOScheduler()
     scheduler.add_job(sms.check_codes, trigger=IntervalTrigger(seconds=1))
     scheduler.start()

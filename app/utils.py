@@ -1,6 +1,4 @@
-import asyncio
-import functools
-from typing import List
+from typing import List, Any
 
 
 class Singleton(type):
@@ -40,3 +38,22 @@ async def validate_dict(key: str | List[str], data: dict) -> bool:
             return False
 
 
+async def db_obj_to_dict(db_obj: Any | List[Any], *args) -> List[dict]:
+    """
+    Converts db_obj to the specified keys format
+
+    :param db_obj:
+    :param keys:
+    :return:
+    """
+    result = list()
+    if hasattr(db_obj, "dict"):
+        result.append(db_obj.dict())
+        return result
+
+    for j in db_obj:
+        if hasattr(j, "dict"):
+            raw_j = j.dict()
+            result.append({key: value for key, value in raw_j.items() if key in args})
+
+    return result

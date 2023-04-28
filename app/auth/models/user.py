@@ -43,8 +43,7 @@ class UserAuth(BaseModel):
     phone: str
 
 
-class UserUpdate(BaseModel):
-    phone: Optional[str] = None
+class UserUpdate(UserAuth):
     name: Optional[str] = None
 
 

@@ -1,6 +1,6 @@
-from typing import Optional, Union, List, Dict, Any
+from typing import Union, Dict, Any
 
-from pydantic import BaseModel, validator
+from pydantic import BaseModel
 
 
 class WSResponse(BaseModel):

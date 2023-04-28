@@ -1,7 +1,6 @@
-import re
 from datetime import datetime, timedelta
 from random import randint
-from typing import Optional, Tuple
+from typing import Optional
 
 from pydantic import ValidationError
 from pyotp import HOTP
@@ -31,7 +30,7 @@ async def send_code(phone: str) -> Optional[UserAuthCodeInfo]:
 
     code = await create_code()
 
-    # await sms.send(phone, code)
+    await sms.send(phone, code)
 
     return await set_code(phone, code)
 
