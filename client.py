@@ -8,13 +8,12 @@ sio = socketio.AsyncClient()
 async def main():
     await sio.connect("http://localhost:8000",
                       auth={
-                          "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwaG9uZSI6Ijg5OTk4NTg4NTQxIiwiZXhwIjoxNjgyODgxMjAzfQ.26jFL6RSiLpLgONBHLZkKAdkA3rr3q9nKTnz4BxGD3o"
+                          "token": "eyJhbasd12GciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwaG9uZSI6Ijg4MDA1NTUzNTM1IiwiZXhwIjoxNjgyODg5MDAzfQ.9hynAJgWGdqpEn-ttgaxS8eA5SQvQjxqESgwKf4En34"
                       }
                       )
     await sio.wait()
 
-
-@sio.on("set_phone")
+@sio.on("add_message")
 async def phone(data):
     print(data)
 
@@ -42,9 +41,11 @@ def callback(data):
 async def connect(data=None):
     print(data)
     print("Connected")
-    await sio.emit("auth", {"phone": "89998588541"}, callback=callback)
+    #await sio.emit("test", {"start": 1, "end": 1}, callback=callback)
+    await sio.emit("auth", {"phone": "88005553535"}, callback=callback)
     await asyncio.sleep(2)
     await sio.emit("auth_confirm", {"code": input(">>> ")}, callback=callback)
+    await sio.wait()
 
 if __name__ == "__main__":
     asyncio.run(main())

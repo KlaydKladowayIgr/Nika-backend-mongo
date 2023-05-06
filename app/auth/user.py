@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, NamedTuple, Tuple, Dict, Any
 
 from app.auth.models.auth import Tokens, TokensRead
 from app.auth.models.user import User
@@ -6,19 +6,24 @@ from app.auth.tokens import create_tokens
 from app.auth.utils.sms import verify_code
 
 
-async def authenticate(code: str) -> Optional[dict]:
+class AuthData(NamedTuple):
+    user: dict
+
+
+async def authenticate(code: str) -> tuple[dict[str, User | TokensRead | Tokens | Any], bool] | None:
     db_code = await verify_code(code)
 
     if not db_code:
         return None
 
     user = await User.get_by_phone(db_code.phone)
-
+    new_user = False
     if not user:
         user = User(
             phone=db_code.phone
         )
         await user.create()
+        new_user = True
 
     tokens = await Tokens.find_one(Tokens.user.id == user.id)
 
@@ -35,10 +40,10 @@ async def authenticate(code: str) -> Optional[dict]:
             user=user
         ).create()
 
-    return {
+    return ({
         "user": user,
         "auth": tokens
-    }
+    }, new_user)
 
 
 async def logout(user: User):

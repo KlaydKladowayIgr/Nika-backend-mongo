@@ -3,6 +3,7 @@ from typing import Optional
 
 import jwt
 
+from app.auth.exceptions import IncorrectToken
 from app.auth.models.auth import TokensRead, Tokens
 from app.auth.models.user import User
 from app.config import CONFIG
@@ -21,7 +22,8 @@ async def validate_token(token: str, is_refresh=False) -> Optional[Tokens]:
     try:
         jwt.decode(token, key, algorithms=["HS256"])
     except Exception:
-        return None
+        pass
+        #return None
 
     if is_refresh:
         db_token = await Tokens.find_one(Tokens.refresh_token == token)
@@ -34,13 +36,13 @@ async def validate_token(token: str, is_refresh=False) -> Optional[Tokens]:
     return db_token
 
 
-async def authenticate(token: str) -> Optional[User]:
+async def authenticate(token: str) -> Optional[dict]:
     db_token = await validate_token(token)
     if not db_token:
         return None
 
     user = await User.get(db_token.user.ref.id)
-    return user
+    return {"user": user, "auth": db_token}
 
 
 async def create_tokens(user: User) -> TokensRead:
@@ -55,9 +57,9 @@ async def create_tokens(user: User) -> TokensRead:
     )
 
 
-async def renew_tokens(token: str) -> bool:
+async def renew_tokens(token: str) -> TokensRead:
     if not await validate_token(token, is_refresh=True):
-        return False
+        raise IncorrectToken
 
     db_token = await Tokens.find_one(Tokens.refresh_token == token)
 
@@ -69,3 +71,5 @@ async def renew_tokens(token: str) -> bool:
         **tokens.dict(),
         user=user
     ).create()
+
+    return tokens

@@ -57,17 +57,25 @@ def generate_promocode(ln: int):
 
 
 class UserRead(UserUpdate):
-    phone: Indexed(str, unique=True)
+    phone: str
     tariff: str = "free"
     tariff_expire: datetime = datetime.utcnow() + timedelta(days=1)
     balance: int = 0
-    promocode: str = generate_promocode(10)
+    promocode: str = None
 
     # validators
     _check_phone = validator("phone", allow_reuse=True)(check_phone)
 
+    @validator("promocode")
+    def setup_promocode(cls, pc):
+        if not pc:
+            return generate_promocode(10)
+        return pc
+
 
 class User(Document, UserRead):
+    phone: Indexed(str, unique=True)
+    promocode: Indexed(str, unique=True) = None
     @property
     def created(self) -> datetime:
         return self.id.generation_time
