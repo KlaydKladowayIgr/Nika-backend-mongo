@@ -31,7 +31,7 @@ async def send_code(phone: str) -> Optional[UserAuthCodeInfo]:
 
     code = await create_code()
 
-    #await sms.send(phone, code)
+    await sms.send(phone, code)
 
     return await set_code(phone, code)
 
